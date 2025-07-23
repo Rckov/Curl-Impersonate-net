@@ -26,7 +26,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           
           $ref = "${{ github.ref_name }}"
-          $version = $ref.Split("/")[-1]
+          $version = $ref.Split("/")[-1] -replace '^v', ''
 
           New-Item -ItemType Directory -Force -Path release
 
@@ -35,7 +35,7 @@ jobs:
           Copy-Item -Path "curl-impersonate\libcurl.dll" -Destination "release\"
           Copy-Item -Path "curl-impersonate\curl-ca-bundle.crt" -Destination "release\"
 
-          Compress-Archive -Path "release\*" -DestinationPath "CurlImpClient-$version.zip"
+          Compress-Archive -Path "release\*" -DestinationPath "CurlImpClient-v$version.zip"
 
           echo "VERSION=$version" >> $env:GITHUB_ENV
 
@@ -44,6 +44,6 @@ jobs:
         with:
           name: "v${{ env.VERSION }}"
           tag_name: "${{ github.ref_name }}"
-          files: CurlImpClient-${{ env.VERSION }}.zip
+          files: CurlImpClient-v${{ env.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
