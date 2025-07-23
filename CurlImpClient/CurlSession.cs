@@ -32,9 +32,8 @@ public class CurlSession : IDisposable
    /// <param name="config">The configuration to use. If null, the default configuration is used.</param>
    public CurlSession(CurlSessionConfig config = null)
    {
-      _sessionConfig ??= config;
-
-      _handle = NativeMethods.curl_easy_init();
+      _handle = NativeMethods.curl_easy_init(); 
+      _sessionConfig = config ?? new CurlSessionConfig();
 
       if (_handle == IntPtr.Zero)
       {
