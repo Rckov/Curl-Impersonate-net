@@ -5,7 +5,7 @@ on:
     tags:
       - "release/v*"
   workflow_dispatch:
-  
+
 jobs:
   build:
     runs-on: windows-latest
@@ -14,24 +14,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Restore
+        run: dotnet restore CurlImpClient/CurlImpClient.csproj
+
       - name: Build (Release)
-        run: |
-          dotnet build CurlImpClient -c Release
-        
+        run: dotnet build CurlImpClient/CurlImpClient.csproj -c Release --framework netstandard2.0
+
       - name: Prepare Release Files
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
           New-Item -ItemType Directory -Force -Path release
-          
+
           Copy-Item -Path "CurlImpClient\bin\Release\netstandard2.0\CurlImpClient.dll" -Destination "release\"
           Copy-Item -Path "curl-impersonate\curl.exe" -Destination "release\"
           Copy-Item -Path "curl-impersonate\libcurl.dll" -Destination "release\"
           Copy-Item -Path "curl-impersonate\curl-ca-bundle.crt" -Destination "release\"
-          
+
           Compress-Archive -Path "release\*" -DestinationPath "CurlImpClient-${{ github.ref_name }}.zip"
-          
-      - uses: softprops/action-gh-release@v1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
           name: "v${{ github.ref_name }}"
           tag_name: "${{ github.ref_name }}"
           files: CurlImpClient-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
