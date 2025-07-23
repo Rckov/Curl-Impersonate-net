@@ -21,8 +21,8 @@ It allows sending HTTP requests that mimic browser TLS fingerprints (JA3, JA4, J
 ## Example Usage
 
 ```csharp
-private const string Proxy = "http://192.160.0.1/handler";
-private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";
+const string Proxy = "http://192.160.0.1/handler";
+const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36";
 
 using var session = new CurlSession(new CurlSessionConfig
 {
@@ -30,9 +30,11 @@ using var session = new CurlSession(new CurlSessionConfig
    EnableHttp2Options = false
 });
 
+// These settings are applied to the entire session (all requests)
 session.SetProxy(Proxy);
 session.SetUserAgent(UserAgent);
 
+// These headers are added only to this specific request
 session.AddHeader("Accept: application/json");
 session.AddHeader("Accept-Language: en-US,en;q=0.9");
 
