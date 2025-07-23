@@ -24,6 +24,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          
+          $ref = "${{ github.ref_name }}"
+          $version = $ref.Split("/")[-1]
 
           New-Item -ItemType Directory -Force -Path release
 
@@ -32,13 +35,15 @@ jobs:
           Copy-Item -Path "curl-impersonate\libcurl.dll" -Destination "release\"
           Copy-Item -Path "curl-impersonate\curl-ca-bundle.crt" -Destination "release\"
 
-          Compress-Archive -Path "release\*" -DestinationPath "CurlImpClient-${{ github.ref_name }}.zip"
+          Compress-Archive -Path "release\*" -DestinationPath "CurlImpClient-$version.zip"
+
+          echo "VERSION=$version" >> $env:GITHUB_ENV
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: "v${{ github.ref_name }}"
+          name: "v${{ env.VERSION }}"
           tag_name: "${{ github.ref_name }}"
-          files: CurlImpClient-${{ github.ref_name }}.zip
+          files: CurlImpClient-${{ env.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
