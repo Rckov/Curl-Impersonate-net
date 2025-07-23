@@ -1,4 +1,4 @@
-﻿namespace CurlImpClient;
+﻿namespace CurlImpClient.Enums;
 
 public enum CURLcode
 {
@@ -121,7 +121,6 @@ public enum CURLoption : int
    CURLOPT_SSL_VERIFYPEER = 64,
    CURLOPT_SSL_VERIFYHOST = 81,
    CURLOPT_CAINFO = 10065,
-
    CURLOPT_HTTP2_PSEUDO_HEADERS_ORDER = 319810,
    CURLOPT_HTTP2_SETTINGS = 319811,
    CURLOPT_HTTP2_WINDOW_UPDATE = 300273,

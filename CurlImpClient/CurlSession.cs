@@ -1,4 +1,6 @@
-﻿using CurlImpClient.Native;
+﻿using CurlImpClient.Enums;
+using CurlImpClient.Exceptions;
+using CurlImpClient.Natives;
 
 using System;
 using System.Collections.Generic;
@@ -7,118 +9,235 @@ using System.Text;
 
 namespace CurlImpClient;
 
+/// <summary>
+/// Manages HTTP requests using libcurl.
+/// </summary>
+
 public class CurlSession : IDisposable
 {
-   private IntPtr handle;
-   private IntPtr headers = IntPtr.Zero;
+   private bool _disposed;
 
-   private readonly WriteCallback writeCallback;
-   private readonly StringBuilder responseBuilder = new();
+   private IntPtr _handle;
+   private IntPtr _headers = IntPtr.Zero;
+
+   private readonly WriteCallback _writeCallback;
+   private readonly StringBuilder _builder = new();
+   private readonly CurlSessionConfig _sessionConfig = new();
 
    private delegate UIntPtr WriteCallback(IntPtr ptr, UIntPtr size, UIntPtr nmemb, IntPtr userdata);
 
-   public CurlSession(string browser = "chrome116", string cookieFile = ":memory:")
+   /// <summary>
+   /// Initializes a new instance of the <see cref="CurlSession"/> class with the specified configuration.
+   /// </summary>
+   /// <param name="config">The configuration to use. If null, the default configuration is used.</param>
+   public CurlSession(CurlSessionConfig config = null)
    {
-      handle = NativeMethods.curl_easy_init();
-      if (handle == IntPtr.Zero)
+      _sessionConfig ??= config;
+
+      _handle = NativeMethods.curl_easy_init();
+
+      if (_handle == IntPtr.Zero)
       {
-         throw new Exception("curl_easy_init failed");
+         throw new CurlException(CURLcode.CURLE_FAILED_INIT, "Failed to initialize CURL.");
       }
 
-      // Браузерный JA3/JA4/ClientHello fingerprint
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_impersonate(handle, browser, 1));
-
-      // Общие настройки
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_FOLLOWLOCATION, 1));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_COOKIEFILE, cookieFile));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_COOKIEJAR, cookieFile));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_TIMEOUT, 30));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_CAINFO, "curl-ca-bundle.crt"));
-      SetSslVerify(true);
-
-      writeCallback = WriteMemoryCallback;
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_WRITEFUNCTION, writeCallback));
+      _writeCallback = WriteMemoryCallback;
+      InitializeCurlOptions();
    }
 
-   public void SetUserAgent(string userAgent) => NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_USERAGENT, userAgent));
-
-   public void SetProxy(string proxy) => NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_PROXY, proxy));
-
-   public void SetPostData(string data) => NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_POSTFIELDS, data));
-
-   public void AddHeader(string header) => headers = NativeMethods.curl_slist_append(headers, header);
-
-   public void AddHeaders(Dictionary<string, string> headersDict)
+   private void InitializeCurlOptions()
    {
-      foreach (var kv in headersDict)
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_impersonate(_handle, _sessionConfig.Browser, 1));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_FOLLOWLOCATION, 1));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_COOKIEFILE, _sessionConfig.CookieFile));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_COOKIEJAR, _sessionConfig.CookieFile));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_TIMEOUT, _sessionConfig.TimeoutSeconds));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_CAINFO, _sessionConfig.CaFilePath));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_SSL_VERIFYPEER, 1));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_SSL_VERIFYHOST, 1));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_WRITEFUNCTION, _writeCallback));
+   }
+
+   /// <summary>
+   /// Adds a header to the request.
+   /// </summary>
+   /// <param name="header">The header to add.</param>
+   public void AddHeader(string header)
+   {
+      if (string.IsNullOrWhiteSpace(header))
       {
+         throw new ArgumentException("Header cannot be null or empty.", nameof(header));
+      }
+
+      _headers = NativeMethods.curl_slist_append(_headers, header);
+   }
+
+   /// <summary>
+   /// Adds multiple headers to the request.
+   /// </summary>
+   /// <param name="headers">A dictionary of headers to add.</param>
+   public void AddHeaders(IDictionary<string, string> headers)
+   {
+      if (headers == null)
+      {
+         throw new ArgumentNullException(nameof(headers));
+      }
+
+      foreach (var kv in headers)
+      {
+         if (string.IsNullOrWhiteSpace(kv.Key) || string.IsNullOrWhiteSpace(kv.Value))
+         {
+            continue;
+         }
+
          AddHeader($"{kv.Key}: {kv.Value}");
       }
    }
 
-   public void SetSslVerify(bool enabled)
+   /// <summary>
+   /// Sets the proxy for the request.
+   /// </summary>
+   /// <param name="proxy">The proxy to use. (http://{host:port} | http://{login:password@host:port})</param>
+   public void SetProxy(string proxy)
    {
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_SSL_VERIFYPEER, enabled ? 1 : 0));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_SSL_VERIFYHOST, enabled ? 2 : 0));
-   }
-
-   public void SetCaFile(string path) => NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_CAINFO, path));
-
-   private void ApplyAdvancedFingerprint()
-   {
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_HTTP2_PSEUDO_HEADERS_ORDER, "masp"));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_HTTP2_SETTINGS, "1:65536;3:1000;4:6291456;6:262144"));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_HTTP2_WINDOW_UPDATE, 15663105));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_SSL_PERMUTE_EXTENSIONS, 1));
-   }
-
-   public string BeginRequest(string method, string url)
-   {
-      responseBuilder.Clear();
-
-      ApplyAdvancedFingerprint();
-
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_CUSTOMREQUEST, method.ToUpperInvariant()));
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_URL, url));
-
-      if (headers != IntPtr.Zero)
+      if (string.IsNullOrWhiteSpace(proxy))
       {
-         NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(handle, CURLoption.CURLOPT_HTTPHEADER, headers));
+         throw new ArgumentException("Proxy cannot be null or empty.", nameof(proxy));
       }
 
-      NativeMethods.ThrowIfError(NativeMethods.curl_easy_perform(handle));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_PROXY, proxy));
+   }
 
-      if (headers != IntPtr.Zero)
+   /// <summary>
+   /// Sets the user agent for the request.
+   /// </summary>
+   /// <param name="userAgent">The user agent to use.</param>
+   public void SetUserAgent(string userAgent)
+   {
+      if (string.IsNullOrWhiteSpace(userAgent))
       {
-         NativeMethods.curl_slist_free_all(headers);
-         headers = IntPtr.Zero;
+         throw new ArgumentException("UserAgent cannot be null or empty.", nameof(userAgent));
       }
 
-      return responseBuilder.ToString();
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_USERAGENT, userAgent));
+   }
+
+   /// <summary>
+   /// Sets the POST data for the request.
+   /// </summary>
+   /// <param name="data">The POST data to send.</param>
+   public void SetPostData(string data)
+   {
+      if (data == null)
+      {
+         throw new ArgumentNullException(nameof(data));
+      }
+
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_POSTFIELDS, data));
+   }
+
+   /// <summary>
+   /// Sets the CA file path for SSL/TLS verification.
+   /// </summary>
+   /// <param name="path">The path to the CA file.</param>
+   public void SetCaFile(string path)
+   {
+      if (string.IsNullOrWhiteSpace(path))
+      {
+         throw new ArgumentException("CA file path cannot be null or empty.", nameof(path));
+      }
+
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_CAINFO, path));
+   }
+
+   /// <summary>
+   /// Executes an HTTP request and returns the response.
+   /// </summary>
+   /// <param name="method">The HTTP method to use.</param>
+   /// <param name="url">The URL to request.</param>
+   /// <returns>The response from the server.</returns>
+   public string ExecuteRequest(HttpMethod method, string url)
+   {
+      if (string.IsNullOrWhiteSpace(url))
+      {
+         throw new ArgumentException("URL cannot be null or empty.", nameof(url));
+      }
+
+      _builder.Clear();
+
+      if (_sessionConfig.EnableHttp2Options)
+      {
+         ConfigureHttp2Options();
+      }
+
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_CUSTOMREQUEST, method.ToString().ToUpperInvariant()));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_URL, url));
+
+      if (_headers != IntPtr.Zero)
+      {
+         NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_HTTPHEADER, _headers));
+      }
+
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_perform(_handle));
+
+      if (_headers != IntPtr.Zero)
+      {
+         NativeMethods.curl_slist_free_all(_headers);
+         _headers = IntPtr.Zero;
+      }
+
+      return _builder.ToString();
+   }
+
+   private void ConfigureHttp2Options()
+   {
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_HTTP2_PSEUDO_HEADERS_ORDER, "masp"));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_HTTP2_SETTINGS, "1:65536;3:1000;4:6291456;6:262144"));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_HTTP2_WINDOW_UPDATE, 15663105));
+      NativeMethods.ThrowIfError(NativeMethods.curl_easy_setopt(_handle, CURLoption.CURLOPT_SSL_PERMUTE_EXTENSIONS, 1));
    }
 
    private UIntPtr WriteMemoryCallback(IntPtr ptr, UIntPtr size, UIntPtr nmemb, IntPtr userdata)
    {
       var realSize = (int)(size.ToUInt64() * nmemb.ToUInt64());
       var buffer = new byte[realSize];
+
       Marshal.Copy(ptr, buffer, 0, realSize);
-      responseBuilder.Append(Encoding.UTF8.GetString(buffer));
+
+      _builder.Append(Encoding.UTF8.GetString(buffer));
 
       return (UIntPtr)(ulong)realSize;
    }
 
+   /// <summary>
+   /// Releases the resources used by the <see cref="CurlSession"/> instance.
+   /// </summary>
    public void Dispose()
    {
-      if (headers != IntPtr.Zero)
+      if (_disposed)
       {
-         NativeMethods.curl_slist_free_all(headers);
-         headers = IntPtr.Zero;
+         return;
       }
 
-      if (handle != IntPtr.Zero)
+      if (_headers != IntPtr.Zero)
       {
-         NativeMethods.curl_easy_cleanup(handle);
-         handle = IntPtr.Zero;
+         NativeMethods.curl_slist_free_all(_headers);
       }
+
+      if (_handle != IntPtr.Zero)
+      {
+         NativeMethods.curl_easy_cleanup(_handle);
+      }
+
+      _handle = IntPtr.Zero;
+      _headers = IntPtr.Zero;
+
+      _disposed = true;
+      GC.SuppressFinalize(this);
+   }
+
+   ~CurlSession()
+   {
+      Dispose();
    }
 }

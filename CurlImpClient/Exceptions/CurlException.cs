@@ -1,15 +1,58 @@
-﻿using System;
+﻿using CurlImpClient.Enums;
+
+using System;
 using System.Collections.Generic;
 
 namespace CurlImpClient.Exceptions;
 
-public class CurlException(CURLcode code) : Exception($"libcurl error ({code}): {GetDescription(code)}")
+/// <summary>
+/// Represents an exception that is thrown when a libcurl operation fails.
+/// </summary>
+public class CurlException : Exception
 {
+   /// <summary>
+   /// Gets the CURL error code that caused the exception.
+   /// </summary>
+   public CURLcode ErrorCode { get; }
+
+   /// <summary>
+   /// Gets the human-readable description of the CURL error code.
+   /// </summary>
+   public string Description => GetDescription(ErrorCode);
+
+   /// <summary>
+   /// Initializes a new instance of the <see cref="CurlException"/> class with the specified CURL error code.
+   /// The exception message is automatically generated based on the error code.
+   /// </summary>
+   /// <param name="code">The CURL error code that caused the exception.</param>
+   public CurlException(CURLcode code) : base($"libcurl error ({code}): {GetDescription(code)}")
+   {
+      ErrorCode = code;
+   }
+
+   /// <summary>
+   /// Initializes a new instance of the <see cref="CurlException"/> class with the specified CURL error code and a custom message.
+   /// </summary>
+   /// <param name="code">The CURL error code that caused the exception.</param>
+   /// <param name="message">A custom message describing the exception.</param>
+   public CurlException(CURLcode code, string message) : base(message)
+   {
+      ErrorCode = code;
+   }
+
+   /// <summary>
+   /// Gets a human-readable description of the specified CURL error code.
+   /// </summary>
+   /// <param name="code">The CURL error code to get the description for.</param>
+   /// <returns>A string describing the error, or "Unknown libcurl error." if the code is not recognized.</returns>
    public static string GetDescription(CURLcode code)
    {
       return _descriptions.TryGetValue(code, out var desc) ? desc : "Unknown libcurl error.";
    }
 
+   /// <summary>
+   /// A dictionary mapping CURL error codes to their human-readable descriptions.
+   /// </summary>
    private static readonly Dictionary<CURLcode, string> _descriptions = new()
    {
       [CURLcode.CURLE_OK] = "No error, operation successful.",
