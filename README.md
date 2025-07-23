@@ -12,12 +12,6 @@ It allows sending HTTP requests that mimic browser TLS fingerprints (JA3, JA4, J
    - `libcurl.dll`
    - `curl-ca-bundle.crt`
 
-## Features
-
-- Send HTTP(S) requests that look like they come from real browsers (e.g., Chrome, Firefox).
-- Reuse sessions and cookies.
-- Easily customize headers, POST data, and proxy settings.
-
 ## Example Usage
 
 ```csharp
@@ -40,6 +34,12 @@ session.AddHeader("Accept-Language: en-US,en;q=0.9");
 
 var response = session.ExecuteRequest(HttpMethod.Get, "https://tls.browserleaks.com/json");
 ```
+
+## Features
+
+- Send HTTP(S) requests that look like they come from real browsers (e.g., Chrome, Firefox).
+- Reuse sessions and cookies.
+- Easily customize headers, POST data, and proxy settings.
 
 Tested with https://tls.browserleaks.com/json, which shows accurate browser fingerprinting like:
 ```json
