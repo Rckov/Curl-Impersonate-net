@@ -1,4 +1,8 @@
-# Curl-Impersonate-net
+# CurlImpersonate.NET
+
+[![.NET Standard Version](https://img.shields.io/badge/.NET%20Standard-2.0-blue.svg)]()
+[![Build and Release](https://github.com/Rckov/Remote-Desktop/actions/workflows/dotnet-desktop.yml/badge.svg)](https://github.com/Rckov/CurlImpersonate.NET/actions/workflows/build.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Rckov/CurlImpersonate.NET)](https://github.com/Rckov/CurlImpersonate.NET/releases/latest)
 
 A lightweight .NET wrapper for `curl-impersonate`.
 
