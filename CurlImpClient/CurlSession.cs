@@ -12,7 +12,6 @@ namespace CurlImpClient;
 /// <summary>
 /// Manages HTTP requests using libcurl.
 /// </summary>
-
 public class CurlSession : IDisposable
 {
    private bool _disposed;
