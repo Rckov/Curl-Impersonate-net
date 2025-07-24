@@ -55,3 +55,6 @@ Tested with https://tls.browserleaks.com/json, which shows accurate browser fing
 ```
 We successfully mimicked a browser.
 
+## License
+Licensed under [MIT](LICENSE).
+
